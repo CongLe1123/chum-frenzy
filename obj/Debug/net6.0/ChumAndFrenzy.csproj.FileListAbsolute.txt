@@ -1,8 +1,0 @@
-C:\Users\Admin\Desktop\FuNny\Stardew Valley\chum-frenzy\bin\Debug\net6.0\ChumFrenzy.deps.json
-C:\Users\Admin\Desktop\FuNny\Stardew Valley\chum-frenzy\bin\Debug\net6.0\ChumFrenzy.dll
-C:\Users\Admin\Desktop\FuNny\Stardew Valley\chum-frenzy\obj\Debug\net6.0\ChumAndFrenzy.csproj.AssemblyReference.cache
-C:\Users\Admin\Desktop\FuNny\Stardew Valley\chum-frenzy\obj\Debug\net6.0\ChumAndFrenzy.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\Admin\Desktop\FuNny\Stardew Valley\chum-frenzy\obj\Debug\net6.0\ChumAndFrenzy.AssemblyInfoInputs.cache
-C:\Users\Admin\Desktop\FuNny\Stardew Valley\chum-frenzy\obj\Debug\net6.0\ChumAndFrenzy.AssemblyInfo.cs
-C:\Users\Admin\Desktop\FuNny\Stardew Valley\chum-frenzy\obj\Debug\net6.0\ChumAndFrenzy.csproj.CoreCompileInputs.cache
-C:\Users\Admin\Desktop\FuNny\Stardew Valley\chum-frenzy\obj\Debug\net6.0\ChumFrenzy.dll

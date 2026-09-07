@@ -1,6 +1,7 @@
 # Build results
-bin/
 obj/
+bin/Debug/
+bin/Release/net8.0/
 
 # Visual Studio / IDE files
 .vs/

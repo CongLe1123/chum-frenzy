@@ -23,4 +23,23 @@ namespace ChumFrenzy.Patches
             }
         }
     }
+
+    [HarmonyPatch(typeof(StardewValley.Locations.MineShaft), nameof(StardewValley.Locations.MineShaft.getFish))]
+    public static class MineShaftPatch
+    {
+        public static void Postfix(float millisecondsAfterNibble, string bait, int waterDepth, Farmer who, double baitPotency, Vector2 bobberTile, string locationName, ref Item __result, GameLocation __instance)
+        {
+            try
+            {
+                if (ModEntry.FishingEffects != null && __result != null && who != null)
+                {
+                    __result = ModEntry.FishingEffects.ApplyCatchModifiers(__instance, bobberTile, who, __result, waterDepth);
+                }
+            }
+            catch (Exception ex)
+            {
+                ModEntry.Instance.Monitor.Log($"Error in MineShaft.getFish patch: {ex}", StardewModdingAPI.LogLevel.Error);
+            }
+        }
+    }
 }

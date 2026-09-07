@@ -8,6 +8,7 @@ using StardewValley;
 using StardewValley.Extensions;
 using StardewValley.GameData.Locations;
 using StardewValley.Internal;
+using StardewValley.Locations;
 using StardewValley.Tools;
 
 namespace ChumFrenzy.Services
@@ -15,17 +16,11 @@ namespace ChumFrenzy.Services
     public class FishingEffectService
     {
         private readonly HotspotManager hotspotManager;
-        private static MethodInfo? checkGenericFishRequirementsMethod;
         private static MethodInfo? getFishFromLocationDataMethod;
 
         public FishingEffectService(HotspotManager hotspotManager)
         {
             this.hotspotManager = hotspotManager;
-
-            checkGenericFishRequirementsMethod = typeof(GameLocation).GetMethod(
-                "CheckGenericFishRequirements",
-                BindingFlags.NonPublic | BindingFlags.Static
-            );
 
             getFishFromLocationDataMethod = typeof(GameLocation).GetMethod(
                 "GetFishFromLocationData",
@@ -218,17 +213,55 @@ namespace ChumFrenzy.Services
             Point tilePoint = player.TilePoint;
             var context = new ItemQueryContext(location, null, Game1.random, $"species chum check for '{targetQualifiedId}'");
 
-            IEnumerable<SpawnFishData> spawns = Game1.locationData["Default"].Fish;
-            if (locData?.Fish?.Count > 0)
+            var spawnsList = new List<SpawnFishData>();
+            if (Game1.locationData.TryGetValue("Default", out var defaultLocData) && defaultLocData.Fish != null)
             {
-                spawns = spawns.Concat(locData.Fish);
+                spawnsList.AddRange(defaultLocData.Fish);
             }
+
+            if (locData?.Fish != null)
+            {
+                foreach (var spawn in locData.Fish)
+                {
+                    if (!string.IsNullOrEmpty(spawn.ItemId) && spawn.ItemId.StartsWith("LOCATION_FISH ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string[] parts = spawn.ItemId.Split(' ');
+                        if (parts.Length > 1 && Game1.locationData.TryGetValue(parts[1], out var refLoc) && refLoc.Fish != null)
+                        {
+                            spawnsList.AddRange(refLoc.Fish);
+                        }
+                    }
+                    else
+                    {
+                        spawnsList.Add(spawn);
+                    }
+                }
+            }
+
+            if (location is MineShaft mine)
+            {
+                if (mine.mineLevel == 100)
+                {
+                    spawnsList.Add(new SpawnFishData { ItemId = "(O)162" }); // Lava Eel
+                }
+                else if (mine.mineLevel == 60)
+                {
+                    spawnsList.Add(new SpawnFishData { ItemId = "(O)161" }); // Ice Pip
+                }
+                else if (mine.mineLevel == 20)
+                {
+                    spawnsList.Add(new SpawnFishData { ItemId = "(O)158" }); // Stonefish
+                }
+            }
+
+            IEnumerable<SpawnFishData> spawns = spawnsList;
 
             foreach (var spawn in spawns)
             {
                 // Must match target fish
-                if (!spawn.ItemId.Equals(targetQualifiedId, StringComparison.OrdinalIgnoreCase) &&
-                    !$"(O){spawn.ItemId}".Equals(targetQualifiedId, StringComparison.OrdinalIgnoreCase))
+                string qualifiedSpawnId = ItemRegistry.QualifyItemId(spawn.ItemId) ?? spawn.ItemId;
+                if (!qualifiedSpawnId.Equals(targetQualifiedId, StringComparison.OrdinalIgnoreCase) &&
+                    !spawn.ItemId.Equals(targetQualifiedId, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -275,34 +308,9 @@ namespace ChumFrenzy.Services
                 if (spawn.CatchLimit > -1 && player.fishCaught.TryGetValue(candidate.QualifiedItemId, out var caught) && caught[0] >= spawn.CatchLimit)
                     continue;
 
-                // Check generic fish requirements (time of day, weather, skill, chance)
-                if (checkGenericFishRequirementsMethod != null)
-                {
-                    try
-                    {
-                        bool pass = (bool)checkGenericFishRequirementsMethod.Invoke(null, new object?[]
-                        {
-                            candidate,
-                            allFishData,
-                            location,
-                            player,
-                            spawn,
-                            waterDepth,
-                            hasMagicBait,
-                            hasCuriosityLure,
-                            false, // usingTargetBait
-                            false  // isTutorialCatch
-                        })!;
-
-                        if (!pass)
-                            continue;
-                    }
-                    catch
-                    {
-                        // If reflection check fails, do not allow bypass
-                        continue;
-                    }
-                }
+                // Check generic fish requirements deterministically (time, weather, season, fishing level, training rod)
+                if (!CheckFishEligibility(candidate, allFishData, location, player, hasMagicBait))
+                    continue;
 
                 // Attach boss fish / pickup flags if applicable
                 if (!string.IsNullOrWhiteSpace(spawn.SetFlagOnCatch))
@@ -319,6 +327,76 @@ namespace ChumFrenzy.Services
             }
 
             return false;
+        }
+
+        private static bool CheckFishEligibility(Item candidate, Dictionary<string, string> allFishData, GameLocation location, Farmer player, bool hasMagicBait)
+        {
+            if (allFishData == null || !allFishData.TryGetValue(candidate.ItemId, out string? rawData) || string.IsNullOrEmpty(rawData))
+                return true;
+
+            string[] parts = rawData.Split('/');
+            if (parts.Length > 1 && parts[1].Equals("trap", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (player.CurrentTool is FishingRod rod && rod.QualifiedItemId == "(T)TrainingRod")
+            {
+                if (int.TryParse(parts[1], out int difficulty) && difficulty >= 50)
+                    return false;
+            }
+
+            if (parts.Length > 12 && int.TryParse(parts[12], out int minLevel))
+            {
+                if (player.FishingLevel < minLevel)
+                    return false;
+            }
+
+            if (!hasMagicBait)
+            {
+                // Season check: field 6
+                if (parts.Length > 6)
+                {
+                    string seasons = parts[6];
+                    if (!seasons.Equals("all", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string currentSeason = Game1.GetSeasonForLocation(location).ToString().ToLowerInvariant();
+                        if (!seasons.Split(' ').Any(s => s.Equals(currentSeason, StringComparison.OrdinalIgnoreCase)))
+                            return false;
+                    }
+                }
+
+                // Weather check: field 7 (sunny, rainy, both)
+                if (parts.Length > 7)
+                {
+                    string weather = parts[7];
+                    bool isRaining = location.IsRainingHere();
+                    if (weather.Equals("sunny", StringComparison.OrdinalIgnoreCase) && isRaining)
+                        return false;
+                    if (weather.Equals("rainy", StringComparison.OrdinalIgnoreCase) && !isRaining)
+                        return false;
+                }
+
+                // Time of day check: field 5
+                if (parts.Length > 5)
+                {
+                    string[] timeTokens = parts[5].Split(' ');
+                    bool timeValid = false;
+                    for (int i = 0; i < timeTokens.Length - 1; i += 2)
+                    {
+                        if (int.TryParse(timeTokens[i], out int startTime) && int.TryParse(timeTokens[i + 1], out int endTime))
+                        {
+                            if (Game1.timeOfDay >= startTime && Game1.timeOfDay < endTime)
+                            {
+                                timeValid = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!timeValid)
+                        return false;
+                }
+            }
+
+            return true;
         }
     }
 }

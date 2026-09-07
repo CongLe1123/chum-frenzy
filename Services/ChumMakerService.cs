@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using StardewModdingAPI;
 using StardewValley;
+using StardewValley.GameData.Machines;
 
 namespace ChumFrenzy.Services
 {
@@ -33,30 +34,19 @@ namespace ChumFrenzy.Services
             if (LegendaryFishIds.Contains(itemId))
                 return true;
 
-            // Check Data/Fish for boss fish flag
-            try
-            {
-                var fishData = DataLoader.Fish(Game1.content);
-                if (fishData != null && fishData.TryGetValue(itemId, out var rawData))
-                {
-                    string[] parts = rawData.Split('/');
-                    if (parts.Length > 1 && parts[1].Equals("trap", StringComparison.OrdinalIgnoreCase))
-                        return false;
-                    // Check if is boss fish or special catch
-                    if (parts.Length > 8 && parts[8].Equals("true", StringComparison.OrdinalIgnoreCase))
-                        return true;
-                }
-            }
-            catch
-            {
-                // Fallback safe
-            }
-
             return false;
         }
 
-        public static Item? OutputSpeciesChum(StardewValley.Object machine, GameLocation location, Farmer player, Item? inputItem, bool probe)
+        public static Item? OutputSpeciesChum(
+            StardewValley.Object machine,
+            Item inputItem,
+            bool probe,
+            MachineItemOutput outputData,
+            Farmer player,
+            out int? overrideMinutesUntilReady)
         {
+            overrideMinutesUntilReady = null;
+
             if (inputItem == null)
                 return null;
 
@@ -65,12 +55,14 @@ namespace ChumFrenzy.Services
                 return null;
 
             // Check legendary restriction
-            if (IsLegendaryFish(inputItem) && !ModEntry.Config.AllowLegendaryProcessing)
+            bool allowLegendary = ModEntry.Config?.AllowLegendaryProcessing ?? false;
+            if (IsLegendaryFish(inputItem) && !allowLegendary)
             {
                 if (!probe && player?.IsLocalPlayer == true)
                 {
-                    Game1.showRedMessage(ModEntry.Instance.Helper.Translation.Get("message.chum_maker.legendary_rejected"));
-                    location.playSound("cancel");
+                    string msg = ModEntry.Instance?.Helper?.Translation?.Get("message.chum_maker.legendary_rejected") ?? "Legendary fish cannot be processed into chum.";
+                    Game1.showRedMessage(msg);
+                    (machine.Location ?? Game1.currentLocation)?.playSound("cancel");
                 }
                 return null;
             }
@@ -82,7 +74,7 @@ namespace ChumFrenzy.Services
 
             if (output is StardewValley.Object obj)
             {
-                int targetFishPrice = inputItem.salePrice(false);
+                int targetFishPrice = (inputItem as StardewValley.Object)?.Price ?? 20;
                 obj.Price = Math.Clamp((int)(targetFishPrice * 0.10f) + 20, 20, 250);
             }
 

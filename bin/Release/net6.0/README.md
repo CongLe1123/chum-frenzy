@@ -52,7 +52,7 @@
 ## 📥 Installation
 
 1. Install the latest version of [SMAPI](https://smapi.io/) (4.0.0 or higher).
-2. Download the latest release: `ChumAndFrenzy 1.0.0.zip`.
+2. Download the latest release: `ChumAndFrenzy 1.0.1.zip`.
 3. Unzip the folder and place `ChumAndFrenzy` into your `Stardew Valley/Mods` folder.
 4. Launch the game using SMAPI!
 

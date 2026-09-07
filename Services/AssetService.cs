@@ -200,7 +200,7 @@ namespace ChumFrenzy.Services
                                 {
                                     new MachineItemOutput
                                     {
-                                        OutputMethod = "ChumFrenzy.Services.ChumMakerService:OutputSpeciesChum"
+                                        OutputMethod = "ChumFrenzy.Services.ChumMakerService, ChumFrenzy:OutputSpeciesChum"
                                     }
                                 }
                             }
