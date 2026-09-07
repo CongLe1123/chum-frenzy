@@ -30,14 +30,18 @@ namespace ChumFrenzy.Rendering
             if (loc == null)
                 return;
 
-            var hotspots = this.hotspotManager.GetHotspots(loc.NameOrUniqueName);
+            string locName = Services.HotspotManager.GetLocationKey(loc);
+            if (string.IsNullOrEmpty(locName))
+                return;
+
+            var hotspots = this.hotspotManager.GetHotspots(locName);
             if (hotspots.Count <= 1)
             {
                 this.secondaryBubbleSprites.Clear();
                 return;
             }
 
-            Point primaryPoint = loc.fishSplashPoint.Value;
+            Point primaryPoint = loc.fishSplashPoint != null ? loc.fishSplashPoint.Value : Point.Zero;
 
             foreach (var h in hotspots)
             {

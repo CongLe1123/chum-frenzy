@@ -12,14 +12,18 @@ namespace ChumFrenzy.Patches
         {
             try
             {
-                if (ModEntry.FishingEffects != null && __result != null && who != null)
+                if (ModEntry.FishingEffects != null && who != null && __instance != null)
                 {
-                    __result = ModEntry.FishingEffects.ApplyCatchModifiers(__instance, bobberTile, who, __result, waterDepth);
+                    var modified = ModEntry.FishingEffects.ApplyCatchModifiers(__instance, bobberTile, who, __result, waterDepth);
+                    if (modified != null)
+                    {
+                        __result = modified;
+                    }
                 }
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Error in GameLocation.getFish patch: {ex}", StardewModdingAPI.LogLevel.Error);
+                ModEntry.Instance?.Monitor?.Log($"Error in GameLocation.getFish patch: {ex}", StardewModdingAPI.LogLevel.Error);
             }
         }
     }
@@ -31,14 +35,18 @@ namespace ChumFrenzy.Patches
         {
             try
             {
-                if (ModEntry.FishingEffects != null && __result != null && who != null)
+                if (ModEntry.FishingEffects != null && who != null && __instance != null)
                 {
-                    __result = ModEntry.FishingEffects.ApplyCatchModifiers(__instance, bobberTile, who, __result, waterDepth);
+                    var modified = ModEntry.FishingEffects.ApplyCatchModifiers(__instance, bobberTile, who, __result, waterDepth);
+                    if (modified != null)
+                    {
+                        __result = modified;
+                    }
                 }
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Error in MineShaft.getFish patch: {ex}", StardewModdingAPI.LogLevel.Error);
+                ModEntry.Instance?.Monitor?.Log($"Error in MineShaft.getFish patch: {ex}", StardewModdingAPI.LogLevel.Error);
             }
         }
     }

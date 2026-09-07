@@ -25,13 +25,38 @@ namespace ChumFrenzy.Services
             return Array.Empty<ChumHotspot>();
         }
 
+        public static string GetLocationKey(GameLocation? location)
+        {
+            if (location == null)
+                return string.Empty;
+
+            try
+            {
+                return location.NameOrUniqueName ?? location.Name ?? string.Empty;
+            }
+            catch
+            {
+                try
+                {
+                    return location.Name ?? string.Empty;
+                }
+                catch
+                {
+                    return string.Empty;
+                }
+            }
+        }
+
         public List<ChumHotspot> GetHotspotsAt(GameLocation? location, Vector2 tile)
         {
             var result = new List<ChumHotspot>();
             if (location == null)
                 return result;
 
-            string locName = location.NameOrUniqueName;
+            string locName = GetLocationKey(location);
+            if (string.IsNullOrEmpty(locName))
+                return result;
+
             if (this.hotspotsByLocation.TryGetValue(locName, out var list))
             {
                 foreach (var h in list)
@@ -172,15 +197,25 @@ namespace ChumFrenzy.Services
             }
         }
 
-        public void SyncLocationNativeFrenzy(GameLocation location)
+        public void SyncLocationNativeFrenzy(GameLocation? location)
         {
-            var hotspots = this.GetHotspots(location.NameOrUniqueName);
+            if (location == null)
+                return;
+
+            string locName = GetLocationKey(location);
+            if (string.IsNullOrEmpty(locName))
+                return;
+
+            var hotspots = this.GetHotspots(locName);
             if (hotspots.Count == 0)
             {
-                if (!location.fishSplashPoint.Value.Equals(Point.Zero))
+                if (location.fishSplashPoint != null && !location.fishSplashPoint.Value.Equals(Point.Zero))
                 {
                     location.fishSplashPoint.Value = Point.Zero;
-                    location.fishFrenzyFish.Value = "";
+                    if (location.fishFrenzyFish != null)
+                    {
+                        location.fishFrenzyFish.Value = "";
+                    }
                 }
                 return;
             }
@@ -188,38 +223,58 @@ namespace ChumFrenzy.Services
             // Select primary hotspot (prefer Frenzy or Species over Basic)
             var primary = hotspots
                 .OrderByDescending(h => h.Type is HotspotType.DeluxeFrenzy or HotspotType.Frenzy ? 2 : (h.Type == HotspotType.Species ? 1 : 0))
-                .First();
+                .FirstOrDefault();
 
-            location.fishSplashPoint.Value = new Point((int)primary.CenterTile.X, (int)primary.CenterTile.Y);
+            if (primary == null)
+                return;
+
+            if (location.fishSplashPoint != null)
+            {
+                location.fishSplashPoint.Value = new Point((int)primary.CenterTile.X, (int)primary.CenterTile.Y);
+            }
 
             if (primary.Type == HotspotType.Species && !string.IsNullOrEmpty(primary.TargetFishQualifiedId))
             {
                 if (ModEntry.FishingEffects != null && ModEntry.FishingEffects.TryResolveEligibleTargetFish(location, primary.TargetFishQualifiedId, primary.CenterTile, 3, Game1.player, out _))
                 {
-                    location.fishFrenzyFish.Value = primary.TargetFishQualifiedId;
+                    if (location.fishFrenzyFish != null)
+                        location.fishFrenzyFish.Value = primary.TargetFishQualifiedId;
                 }
                 else
                 {
-                    location.fishFrenzyFish.Value = "";
+                    if (location.fishFrenzyFish != null)
+                        location.fishFrenzyFish.Value = "";
                 }
             }
             else if (primary.Type is HotspotType.Frenzy or HotspotType.DeluxeFrenzy)
             {
                 // Select eligible fish from location to frenzy
-                var fishItem = location.getFish(0f, "", 3, Game1.player, 0.0, primary.CenterTile);
+                Item? fishItem = null;
+                try
+                {
+                    fishItem = location.getFish(0f, "", 3, Game1.player, 0.0, primary.CenterTile);
+                }
+                catch
+                {
+                    fishItem = null;
+                }
+
                 if (fishItem != null && fishItem.Category == -4 && !fishItem.HasContextTag("fish_legendary"))
                 {
-                    location.fishFrenzyFish.Value = fishItem.QualifiedItemId;
+                    if (location.fishFrenzyFish != null)
+                        location.fishFrenzyFish.Value = fishItem.QualifiedItemId;
                 }
                 else
                 {
-                    location.fishFrenzyFish.Value = "";
+                    if (location.fishFrenzyFish != null)
+                        location.fishFrenzyFish.Value = "";
                 }
             }
             else
             {
                 // Basic Chum = standard fishing bubble hotspot
-                location.fishFrenzyFish.Value = "";
+                if (location.fishFrenzyFish != null)
+                    location.fishFrenzyFish.Value = "";
             }
         }
     }

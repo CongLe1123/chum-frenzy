@@ -62,7 +62,7 @@ namespace ChumFrenzy.Services
             return Math.Max(reducedDelay, minDelayMs);
         }
 
-        public static bool IsJunk(Item item)
+        public static bool IsJunk(Item? item)
         {
             if (item == null)
                 return true;
@@ -74,14 +74,14 @@ namespace ChumFrenzy.Services
             return id is "167" or "168" or "169" or "170" or "171" or "172";
         }
 
-        public Item ApplyCatchModifiers(GameLocation location, Vector2 bobberTile, Farmer who, Item initialCatch, int waterDepth)
+        public Item? ApplyCatchModifiers(GameLocation location, Vector2 bobberTile, Farmer who, Item? initialCatch, int waterDepth)
         {
             var hotspots = this.hotspotManager.GetHotspotsAt(location, bobberTile);
             if (hotspots.Count == 0)
                 return initialCatch;
 
             var config = ModEntry.Config;
-            Item currentCatch = initialCatch;
+            Item? currentCatch = initialCatch;
 
             // 1. Trash Reduction (Frenzy & Deluxe Frenzy)
             if (IsJunk(currentCatch))
@@ -141,7 +141,7 @@ namespace ChumFrenzy.Services
                     float weightMultiplier = kvp.Value;
 
                     // Already caught this target
-                    if (currentCatch.QualifiedItemId.Equals(targetId, StringComparison.OrdinalIgnoreCase))
+                    if (currentCatch != null && currentCatch.QualifiedItemId.Equals(targetId, StringComparison.OrdinalIgnoreCase))
                         continue;
 
                     // Strictly check if the target fish is normally eligible right now!
@@ -160,6 +160,20 @@ namespace ChumFrenzy.Services
             }
 
             return currentCatch;
+        }
+
+        private static Season SafeGetSeasonForLocation(GameLocation? location)
+        {
+            if (location == null)
+                return Game1.season;
+            try
+            {
+                return Game1.GetSeasonForLocation(location);
+            }
+            catch
+            {
+                return Game1.season;
+            }
         }
 
         private Item? RollFishFromLocation(GameLocation location, Vector2 bobberTile, int waterDepth, Farmer who)
@@ -189,13 +203,15 @@ namespace ChumFrenzy.Services
             return null;
         }
 
-        public bool TryResolveEligibleTargetFish(GameLocation location, string targetQualifiedId, Vector2 bobberTile, int waterDepth, Farmer player, out Item? resolvedFish)
+        public bool TryResolveEligibleTargetFish(GameLocation? location, string? targetQualifiedId, Vector2 bobberTile, int waterDepth, Farmer? player, out Item? resolvedFish)
         {
             resolvedFish = null;
+            if (location == null || string.IsNullOrEmpty(targetQualifiedId))
+                return false;
 
             LocationData? locData = location.GetData();
-            Dictionary<string, string> allFishData = DataLoader.Fish(Game1.content);
-            Season seasonForLocation = Game1.GetSeasonForLocation(location);
+            Dictionary<string, string>? allFishData = DataLoader.Fish(Game1.content);
+            Season seasonForLocation = SafeGetSeasonForLocation(location);
 
             if (!location.TryGetFishAreaForTile(bobberTile, out string? areaId, out var _))
             {
@@ -204,31 +220,35 @@ namespace ChumFrenzy.Services
 
             bool hasMagicBait = false;
             bool hasCuriosityLure = false;
-            if (player.CurrentTool is FishingRod { isFishing: true } rod)
+            if (player?.CurrentTool is FishingRod { isFishing: true } rod)
             {
                 hasMagicBait = rod.HasMagicBait();
                 hasCuriosityLure = rod.HasCuriosityLure();
             }
 
-            Point tilePoint = player.TilePoint;
-            var context = new ItemQueryContext(location, null, Game1.random, $"species chum check for '{targetQualifiedId}'");
+            Point tilePoint = player?.TilePoint ?? new Point((int)bobberTile.X, (int)bobberTile.Y);
+            int fishingLevel = player?.FishingLevel ?? 0;
+            var context = new ItemQueryContext(location, player, Game1.random, $"species chum check for '{targetQualifiedId}'");
 
             var spawnsList = new List<SpawnFishData>();
-            if (Game1.locationData.TryGetValue("Default", out var defaultLocData) && defaultLocData.Fish != null)
+            if (Game1.locationData != null && Game1.locationData.TryGetValue("Default", out var defaultLocData) && defaultLocData?.Fish != null)
             {
-                spawnsList.AddRange(defaultLocData.Fish);
+                spawnsList.AddRange(defaultLocData.Fish.Where(f => f != null));
             }
 
             if (locData?.Fish != null)
             {
                 foreach (var spawn in locData.Fish)
                 {
+                    if (spawn == null)
+                        continue;
+
                     if (!string.IsNullOrEmpty(spawn.ItemId) && spawn.ItemId.StartsWith("LOCATION_FISH ", StringComparison.OrdinalIgnoreCase))
                     {
                         string[] parts = spawn.ItemId.Split(' ');
-                        if (parts.Length > 1 && Game1.locationData.TryGetValue(parts[1], out var refLoc) && refLoc.Fish != null)
+                        if (parts.Length > 1 && Game1.locationData != null && Game1.locationData.TryGetValue(parts[1], out var refLoc) && refLoc?.Fish != null)
                         {
-                            spawnsList.AddRange(refLoc.Fish);
+                            spawnsList.AddRange(refLoc.Fish.Where(f => f != null));
                         }
                     }
                     else
@@ -258,10 +278,13 @@ namespace ChumFrenzy.Services
 
             foreach (var spawn in spawns)
             {
+                if (spawn == null || string.IsNullOrEmpty(spawn.ItemId))
+                    continue;
+
                 // Must match target fish
                 string qualifiedSpawnId = ItemRegistry.QualifyItemId(spawn.ItemId) ?? spawn.ItemId;
-                if (!qualifiedSpawnId.Equals(targetQualifiedId, StringComparison.OrdinalIgnoreCase) &&
-                    !spawn.ItemId.Equals(targetQualifiedId, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(qualifiedSpawnId, targetQualifiedId, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(spawn.ItemId, targetQualifiedId, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -283,7 +306,7 @@ namespace ChumFrenzy.Services
                     continue;
 
                 // Check fishing level
-                if (player.FishingLevel < spawn.MinFishingLevel)
+                if (fishingLevel < spawn.MinFishingLevel)
                     continue;
 
                 // Check depth
@@ -296,16 +319,47 @@ namespace ChumFrenzy.Services
 
                 // Check condition GameStateQuery
                 HashSet<string>? ignoreQueryKeys = hasMagicBait ? GameStateQuery.MagicBaitIgnoreQueryKeys : null;
-                if (spawn.Condition != null && !GameStateQuery.CheckConditions(spawn.Condition, location, null, null, null, null, ignoreQueryKeys))
-                    continue;
+                if (spawn.Condition != null)
+                {
+                    try
+                    {
+                        if (!GameStateQuery.CheckConditions(spawn.Condition, location, player, null, null, null, ignoreQueryKeys))
+                            continue;
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                }
 
                 // Resolve item candidate
-                Item? candidate = ItemQueryResolver.TryResolveRandomItem(spawn, context, avoidRepeat: false, null, (string query) => query.Replace("BOBBER_X", ((int)bobberTile.X).ToString()).Replace("BOBBER_Y", ((int)bobberTile.Y).ToString()).Replace("WATER_DEPTH", waterDepth.ToString()));
+                Item? candidate = null;
+                try
+                {
+                    candidate = ItemQueryResolver.TryResolveRandomItem(spawn, context, avoidRepeat: false, null, (string query) => query.Replace("BOBBER_X", ((int)bobberTile.X).ToString()).Replace("BOBBER_Y", ((int)bobberTile.Y).ToString()).Replace("WATER_DEPTH", waterDepth.ToString()));
+                }
+                catch
+                {
+                    candidate = null;
+                }
+
+                if (candidate == null && !string.IsNullOrEmpty(targetQualifiedId))
+                {
+                    try
+                    {
+                        candidate = ItemRegistry.Create(targetQualifiedId);
+                    }
+                    catch
+                    {
+                        candidate = null;
+                    }
+                }
+
                 if (candidate == null)
                     continue;
 
                 // Check catch limit
-                if (spawn.CatchLimit > -1 && player.fishCaught.TryGetValue(candidate.QualifiedItemId, out var caught) && caught[0] >= spawn.CatchLimit)
+                if (spawn.CatchLimit > -1 && player?.fishCaught != null && player.fishCaught.TryGetValue(candidate.QualifiedItemId, out var caught) && caught[0] >= spawn.CatchLimit)
                     continue;
 
                 // Check generic fish requirements deterministically (time, weather, season, fishing level, training rod)
@@ -313,13 +367,20 @@ namespace ChumFrenzy.Services
                     continue;
 
                 // Attach boss fish / pickup flags if applicable
-                if (!string.IsNullOrWhiteSpace(spawn.SetFlagOnCatch))
+                try
                 {
-                    candidate.SetFlagOnPickup = spawn.SetFlagOnCatch;
+                    if (!string.IsNullOrWhiteSpace(spawn.SetFlagOnCatch))
+                    {
+                        candidate.SetFlagOnPickup = spawn.SetFlagOnCatch;
+                    }
+                    if (spawn.IsBossFish)
+                    {
+                        candidate.SetTempData("IsBossFish", true);
+                    }
                 }
-                if (spawn.IsBossFish)
+                catch
                 {
-                    candidate.SetTempData("IsBossFish", true);
+                    // Ignore flag attach failure
                 }
 
                 resolvedFish = candidate;
@@ -329,8 +390,11 @@ namespace ChumFrenzy.Services
             return false;
         }
 
-        private static bool CheckFishEligibility(Item candidate, Dictionary<string, string> allFishData, GameLocation location, Farmer player, bool hasMagicBait)
+        private static bool CheckFishEligibility(Item candidate, Dictionary<string, string>? allFishData, GameLocation location, Farmer? player, bool hasMagicBait)
         {
+            if (candidate == null)
+                return false;
+
             if (allFishData == null || !allFishData.TryGetValue(candidate.ItemId, out string? rawData) || string.IsNullOrEmpty(rawData))
                 return true;
 
@@ -338,13 +402,13 @@ namespace ChumFrenzy.Services
             if (parts.Length > 1 && parts[1].Equals("trap", StringComparison.OrdinalIgnoreCase))
                 return false;
 
-            if (player.CurrentTool is FishingRod rod && rod.QualifiedItemId == "(T)TrainingRod")
+            if (player?.CurrentTool is FishingRod rod && rod.QualifiedItemId == "(T)TrainingRod")
             {
                 if (int.TryParse(parts[1], out int difficulty) && difficulty >= 50)
                     return false;
             }
 
-            if (parts.Length > 12 && int.TryParse(parts[12], out int minLevel))
+            if (player != null && parts.Length > 12 && int.TryParse(parts[12], out int minLevel))
             {
                 if (player.FishingLevel < minLevel)
                     return false;
@@ -358,7 +422,7 @@ namespace ChumFrenzy.Services
                     string seasons = parts[6];
                     if (!seasons.Equals("all", StringComparison.OrdinalIgnoreCase))
                     {
-                        string currentSeason = Game1.GetSeasonForLocation(location).ToString().ToLowerInvariant();
+                        string currentSeason = SafeGetSeasonForLocation(location).ToString().ToLowerInvariant();
                         if (!seasons.Split(' ').Any(s => s.Equals(currentSeason, StringComparison.OrdinalIgnoreCase)))
                             return false;
                     }
@@ -368,7 +432,16 @@ namespace ChumFrenzy.Services
                 if (parts.Length > 7)
                 {
                     string weather = parts[7];
-                    bool isRaining = location.IsRainingHere();
+                    bool isRaining = false;
+                    try
+                    {
+                        isRaining = location != null && location.IsRainingHere();
+                    }
+                    catch
+                    {
+                        isRaining = Game1.isRaining;
+                    }
+
                     if (weather.Equals("sunny", StringComparison.OrdinalIgnoreCase) && isRaining)
                         return false;
                     if (weather.Equals("rainy", StringComparison.OrdinalIgnoreCase) && !isRaining)

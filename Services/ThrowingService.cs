@@ -314,9 +314,10 @@ namespace ChumFrenzy.Services
                         break;
                 }
 
+                string locKey = HotspotManager.GetLocationKey(location);
                 var hotspot = new ChumHotspot(
                     Guid.NewGuid(),
-                    location.NameOrUniqueName,
+                    locKey,
                     projectile.TargetTile,
                     radius,
                     projectile.Type,
@@ -334,8 +335,9 @@ namespace ChumFrenzy.Services
             else
             {
                 // Client in multiplayer: Request host to create
+                string locKey = HotspotManager.GetLocationKey(location);
                 this.multiplayerSync.SendThrowRequest(
-                    location.NameOrUniqueName,
+                    locKey,
                     projectile.TargetTile,
                     projectile.Type,
                     projectile.TargetFishQualifiedId,
