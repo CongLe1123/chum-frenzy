@@ -1,0 +1,10 @@
+{
+  "Name": "Chum & Fish Frenzy",
+  "Author": "ChumTeam",
+  "Version": "1.0.0",
+  "Description": "Expands fishing by adding craftable chum, frenzies, dynamic species-targeted chum, and the Chum Maker machine.",
+  "UniqueID": "ChumTeam.ChumFrenzy",
+  "EntryDll": "ChumFrenzy.dll",
+  "MinimumApiVersion": "4.0.0",
+  "UpdateKeys": []
+}
